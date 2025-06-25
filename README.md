@@ -15,6 +15,8 @@ A web component to represent a graph data structure in a 2-dimensional canvas us
 Uses HTML5 canvas for rendering and [d3-force](https://github.com/d3/d3-force) for the underlying physics engine.
 Supports canvas zooming/panning, node dragging and node/link hover/click interactions.
 
+**New**: Built-in pathfinding methods for shortest path calculation and highlighting - no external dependencies required!
+
 See also the [3D version](https://github.com/vasturiano/3d-force-graph).
 
 And check out the [React bindings](https://github.com/vasturiano/react-force-graph).
@@ -34,6 +36,8 @@ And check out the [React bindings](https://github.com/vasturiano/react-force-gra
 * [Text in links](https://vasturiano.github.io/force-graph/example/text-links/) ([source](https://github.com/vasturiano/force-graph/blob/master/example/text-links/index.html))
 * [Dash odd links](https://vasturiano.github.io/force-graph/example/dash-odd-links/) ([source](https://github.com/vasturiano/force-graph/blob/master/example/dash-odd-links/index.html))
 * [Highlight nodes/links](https://vasturiano.github.io/force-graph/example/highlight/) ([source](https://github.com/vasturiano/force-graph/blob/master/example/highlight/index.html))
+* [Shortest path highlighting](https://vasturiano.github.io/force-graph/example/shortest-path/) ([source](https://github.com/vasturiano/force-graph/blob/master/example/shortest-path/index.html))
+* [Built-in pathfinding methods](https://vasturiano.github.io/force-graph/example/shortest-path-builtin/) ([source](https://github.com/vasturiano/force-graph/blob/master/example/shortest-path-builtin/index.html))
 * [Multiple Node Selection](https://vasturiano.github.io/force-graph/example/multi-selection/) ([source](https://github.com/vasturiano/force-graph/blob/master/example/multi-selection/index.html))
 * [Auto-colored nodes/links](https://vasturiano.github.io/force-graph/example/auto-colored/) ([source](https://github.com/vasturiano/force-graph/blob/master/example/auto-colored/index.html))
 * [Custom node shapes](https://vasturiano.github.io/force-graph/example/custom-node-shape/) ([source](https://github.com/vasturiano/force-graph/blob/master/example/custom-node-shape/index.html))
@@ -120,6 +124,16 @@ const myGraph = new ForceGraph(<myDOMElement>)
 | <b>linkDirectionalParticleWidth</b>([<i>num</i>, <i>str</i> or <i>fn</i>]) | Link object accessor function, attribute or a numeric constant for the directional particles width (diameter). | 4 |
 | <b>linkDirectionalParticleColor</b>([<i>str</i> or <i>fn</i>]) | Link object accessor function or attribute for the directional particles color. | `color` |
 | <b>emitParticle</b>(<i>link</i>) | An alternative mechanism for generating particles, this method emits a non-cyclical single particle within a specific link. The emitted particle shares the styling (speed, width, color) of the regular particle props. A valid `link` object that is included in `graphData` should be passed as a single parameter. ||
+
+### Pathfinding
+
+| Method | Description | Default |
+| --- | --- | :--: |
+| <b>findShortestPath</b>(<i>startNodeId</i>, <i>endNodeId</i>) | Calculates the shortest path between two nodes using BFS algorithm. Returns an array of node IDs representing the path, or `null` if no path exists. Supports both string and numeric node IDs. | |
+| <b>highlightPath</b>(<i>path</i>) | Visually highlights a path on the graph with automatic color coding. Pass an array of node IDs to highlight, or `null`/`undefined` to clear highlighting. Start node: red, end node: blue, path nodes: green, path links: orange. | |
+| <b>clearPathHighlight</b>() | Removes all path highlighting from the graph. | |
+| <b>findAndHighlightPath</b>(<i>startNodeId</i>, <i>endNodeId</i>) | Convenience method that combines `findShortestPath()` and `highlightPath()`. Finds the shortest path and highlights it in one call. Returns the path array or `null`. | |
+| <b>getPathHighlight</b>() | Returns information about the currently highlighted path, including node IDs, node objects, link objects, and start/end nodes. Returns `null` if no path is highlighted. | |
 
 ### Render control
 
