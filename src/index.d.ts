@@ -153,6 +153,22 @@ export declare class ForceGraphGeneric<ChainableInstance, N extends NodeObject =
   d3Force(forceName: 'link' | 'charge' | 'center' | string): ForceFn<N> | undefined;
   d3Force(forceName: 'link' | 'charge' | 'center' | string, forceFn: ForceFn<N> | null): ChainableInstance;
   d3ReheatSimulation(): ChainableInstance;
+  
+  // Pathfinding methods
+  findShortestPath(startNodeId: string | number, endNodeId: string | number): (string | number)[] | null;
+  highlightPath(path: (string | number)[] | null): ChainableInstance;
+  clearPathHighlight(): ChainableInstance;
+  findAndHighlightPath(startNodeId: string | number, endNodeId: string | number): (string | number)[] | null;
+  getPathHighlight(): {
+    path: (string | number)[];
+    nodes: Set<string | number>;
+    links: Set<L>;
+    nodeObjects: N[];
+    linkObjects: L[];
+    startNodeId: string | number;
+    endNodeId: string | number;
+  } | null;
+  
   warmupTicks(): number;
   warmupTicks(ticks: number): ChainableInstance;
   cooldownTicks(): number;

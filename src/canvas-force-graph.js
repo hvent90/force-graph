@@ -148,8 +148,27 @@ export default Kapsule({
       function paintNodes() {
         const getVisibility = accessorFn(state.nodeVisibility);
         const getVal = accessorFn(state.nodeVal);
-        const getColor = accessorFn(state.nodeColor);
+        const getBaseColor = accessorFn(state.nodeColor);
         const getNodeCanvasObjectMode = accessorFn(state.nodeCanvasObjectMode);
+        
+        // Enhanced color function with path highlighting
+        const getColor = (node) => {
+          if (state.pathHighlight) {
+            const nodeIdAccessor = accessorFn(state.nodeId);
+            const nodeId = nodeIdAccessor(node);
+            
+            if (nodeId === state.pathHighlight.startNodeId) {
+              return '#ff4444'; // Red for start node
+            }
+            if (nodeId === state.pathHighlight.endNodeId) {
+              return '#4444ff'; // Blue for end node
+            }
+            if (state.pathHighlight.nodes.has(nodeId)) {
+              return '#44ff44'; // Green for path nodes
+            }
+          }
+          return getBaseColor(node) || 'rgba(31, 120, 180, 0.92)';
+        };
 
         const ctx = state.ctx;
 
@@ -190,11 +209,26 @@ export default Kapsule({
 
       function paintLinks() {
         const getVisibility = accessorFn(state.linkVisibility);
-        const getColor = accessorFn(state.linkColor);
-        const getWidth = accessorFn(state.linkWidth);
+        const getBaseColor = accessorFn(state.linkColor);
+        const getBaseWidth = accessorFn(state.linkWidth);
         const getLineDash = accessorFn(state.linkLineDash);
         const getCurvature = accessorFn(state.linkCurvature);
         const getLinkCanvasObjectMode = accessorFn(state.linkCanvasObjectMode);
+        
+        // Enhanced color and width functions with path highlighting
+        const getColor = (link) => {
+          if (state.pathHighlight && state.pathHighlight.links.has(link)) {
+            return '#ffaa00'; // Orange for path links
+          }
+          return getBaseColor(link) || 'rgba(153, 153, 153, 0.6)';
+        };
+        
+        const getWidth = (link) => {
+          if (state.pathHighlight && state.pathHighlight.links.has(link)) {
+            return Math.max(4, getBaseWidth(link) || 1); // Thicker path links
+          }
+          return getBaseWidth(link) || 1;
+        };
 
         const ctx = state.ctx;
 
@@ -444,6 +478,146 @@ export default Kapsule({
       }
 
       return this;
+    },
+
+    // Pathfinding methods
+    findShortestPath: function(state, startNodeId, endNodeId) {
+      const nodeIdAccessor = accessorFn(state.nodeId);
+      const linkSourceAccessor = accessorFn(state.linkSource);
+      const linkTargetAccessor = accessorFn(state.linkTarget);
+      
+      // Build adjacency list
+      const adjacencyList = {};
+      
+      // Initialize adjacency list
+      state.graphData.nodes.forEach(node => {
+        const nodeId = nodeIdAccessor(node);
+        adjacencyList[nodeId] = [];
+      });
+      
+      // Add edges (undirected graph)
+      state.graphData.links.forEach(link => {
+        const sourceId = linkSourceAccessor(link);
+        const targetId = linkTargetAccessor(link);
+        
+        if (adjacencyList[sourceId] && adjacencyList[targetId]) {
+          adjacencyList[sourceId].push(targetId);
+          adjacencyList[targetId].push(sourceId);
+        }
+      });
+      
+      // BFS shortest path algorithm
+      if (startNodeId === endNodeId) return [startNodeId];
+      
+      const queue = [startNodeId];
+      const visited = new Set([startNodeId]);
+      const parent = { [startNodeId]: null };
+      
+      while (queue.length > 0) {
+        const current = queue.shift();
+        
+        if (current === endNodeId) {
+          // Reconstruct path
+          const path = [];
+          let node = endNodeId;
+          while (node !== null) {
+            path.unshift(node);
+            node = parent[node];
+          }
+          return path;
+        }
+        
+        for (const neighbor of adjacencyList[current] || []) {
+          if (!visited.has(neighbor)) {
+            visited.add(neighbor);
+            parent[neighbor] = current;
+            queue.push(neighbor);
+          }
+        }
+      }
+      
+      return null; // No path found
+    }
+    },
+
+    highlightPath: function(state, path) {
+      if (!path || !Array.isArray(path)) {
+        // Clear highlighting
+        state.pathHighlight = null;
+        state.onNeedsRedraw && state.onNeedsRedraw();
+        return this;
+      }
+      
+      const nodeIdAccessor = accessorFn(state.nodeId);
+      const linkSourceAccessor = accessorFn(state.linkSource);
+      const linkTargetAccessor = accessorFn(state.linkTarget);
+      
+      // Find nodes in path
+      const pathNodes = new Set();
+      const pathNodeObjects = [];
+      
+      path.forEach(nodeId => {
+        const node = state.graphData.nodes.find(n => nodeIdAccessor(n) === nodeId);
+        if (node) {
+          pathNodes.add(nodeId);
+          pathNodeObjects.push(node);
+        }
+      });
+      
+      // Find links in path
+      const pathLinks = new Set();
+      const pathLinkObjects = [];
+      
+      for (let i = 0; i < path.length - 1; i++) {
+        const sourceId = path[i];
+        const targetId = path[i + 1];
+        
+        const link = state.graphData.links.find(l => {
+          const lSourceId = linkSourceAccessor(l);
+          const lTargetId = linkTargetAccessor(l);
+          return (lSourceId === sourceId && lTargetId === targetId) ||
+                 (lSourceId === targetId && lTargetId === sourceId);
+        });
+        
+        if (link) {
+          pathLinks.add(link);
+          pathLinkObjects.push(link);
+        }
+      }
+      
+      // Store highlight state
+      state.pathHighlight = {
+        path: path,
+        nodes: pathNodes,
+        links: pathLinks,
+        nodeObjects: pathNodeObjects,
+        linkObjects: pathLinkObjects,
+        startNodeId: path[0],
+        endNodeId: path[path.length - 1]
+      };
+      
+      // Trigger redraw
+      state.onNeedsRedraw && state.onNeedsRedraw();
+      
+      return this;
+    },
+
+    clearPathHighlight: function(state) {
+      state.pathHighlight = null;
+      state.onNeedsRedraw && state.onNeedsRedraw();
+      return this;
+    },
+
+    findAndHighlightPath: function(state, startNodeId, endNodeId) {
+      const path = this.findShortestPath(startNodeId, endNodeId);
+      if (path) {
+        this.highlightPath(path);
+      }
+      return path;
+    },
+
+    getPathHighlight: function(state) {
+      return state.pathHighlight;
     }
   },
 
@@ -454,7 +628,8 @@ export default Kapsule({
       .force('center', d3ForceCenter())
       .force('dagRadial', null)
       .stop(),
-    engineRunning: false
+    engineRunning: false,
+    pathHighlight: null
   }),
 
   init(canvasCtx, state) {

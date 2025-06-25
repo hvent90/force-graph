@@ -1,0 +1,241 @@
+<head>
+  <style>
+    body { margin: 0; font-family: Arial, sans-serif; }
+    #controls {
+      position: absolute;
+      top: 10px;
+      left: 10px;
+      background: rgba(255, 255, 255, 0.9);
+      padding: 15px;
+      border-radius: 5px;
+      box-shadow: 0 2px 5px rgba(0,0,0,0.2);
+      z-index: 1000;
+    }
+    .control-group {
+      margin-bottom: 10px;
+    }
+    label {
+      display: block;
+      margin-bottom: 5px;
+      font-weight: bold;
+    }
+    select, button {
+      padding: 5px;
+      margin-right: 10px;
+    }
+    button {
+      background-color: #4CAF50;
+      color: white;
+      border: none;
+      cursor: pointer;
+      border-radius: 3px;
+    }
+    button:hover {
+      background-color: #45a049;
+    }
+    button:disabled {
+      background-color: #cccccc;
+      cursor: not-allowed;
+    }
+    #status {
+      margin-top: 10px;
+      padding: 5px;
+      font-size: 12px;
+      color: #666;
+    }
+    #legend {
+      position: absolute;
+      top: 10px;
+      right: 10px;
+      background: rgba(255, 255, 255, 0.9);
+      padding: 15px;
+      border-radius: 5px;
+      box-shadow: 0 2px 5px rgba(0,0,0,0.2);
+      z-index: 1000;
+    }
+    .legend-item {
+      display: flex;
+      align-items: center;
+      margin-bottom: 5px;
+    }
+    .legend-color {
+      width: 20px;
+      height: 20px;
+      border-radius: 50%;
+      margin-right: 10px;
+    }
+  </style>
+
+  <!--<script src="//unpkg.com/force-graph"></script>-->
+  <script src="../../dist/force-graph.js"></script>
+</head>
+
+<body>
+  <div id="controls">
+    <div class="control-group">
+      <label for="startNode">Start Node:</label>
+      <select id="startNode">
+        <option value="">Select start node...</option>
+      </select>
+    </div>
+    <div class="control-group">
+      <label for="endNode">End Node:</label>
+      <select id="endNode">
+        <option value="">Select end node...</option>
+      </select>
+    </div>
+    <div class="control-group">
+      <button id="findPath">Find Shortest Path</button>
+      <button id="clearPath">Clear Path</button>
+    </div>
+    <div id="status"></div>
+  </div>
+
+  <div id="legend">
+    <h4>Legend</h4>
+    <div class="legend-item">
+      <div class="legend-color" style="background-color: #ff4444;"></div>
+      <span>Start Node</span>
+    </div>
+    <div class="legend-item">
+      <div class="legend-color" style="background-color: #4444ff;"></div>
+      <span>End Node</span>
+    </div>
+    <div class="legend-item">
+      <div class="legend-color" style="background-color: #44ff44;"></div>
+      <span>Path Nodes</span>
+    </div>
+    <div class="legend-item">
+      <div class="legend-color" style="background-color: #ffaa00;"></div>
+      <span>Path Links</span>
+    </div>
+  </div>
+
+  <div id="graph"></div>
+
+  <script>
+    // Generate a graph for pathfinding demonstration
+    const N = 40;
+    const gData = {
+      nodes: [...Array(N).keys()].map(i => ({ 
+        id: i,
+        name: `Node ${i}`,
+        val: Math.random() * 10 + 1
+      })),
+      links: []
+    };
+
+    // Create a connected graph with multiple paths
+    // Tree structure first
+    for (let i = 1; i < N; i++) {
+      gData.links.push({
+        source: i,
+        target: Math.floor(Math.random() * i)
+      });
+    }
+
+    // Add additional connections for alternative paths
+    for (let i = 0; i < N * 0.4; i++) {
+      const source = Math.floor(Math.random() * N);
+      const target = Math.floor(Math.random() * N);
+      if (source !== target) {
+        const linkExists = gData.links.some(link => 
+          (link.source === source && link.target === target) ||
+          (link.source === target && link.target === source)
+        );
+        if (!linkExists) {
+          gData.links.push({ source, target });
+        }
+      }
+    }
+
+    // Populate node selectors
+    function populateSelectors() {
+      const startSelect = document.getElementById('startNode');
+      const endSelect = document.getElementById('endNode');
+      
+      gData.nodes.forEach(node => {
+        const option1 = document.createElement('option');
+        option1.value = node.id;
+        option1.textContent = node.name;
+        startSelect.appendChild(option1);
+        
+        const option2 = document.createElement('option');
+        option2.value = node.id;
+        option2.textContent = node.name;
+        endSelect.appendChild(option2);
+      });
+    }
+
+    // Update status display
+    function updateStatus(message) {
+      document.getElementById('status').textContent = message;
+    }
+
+    // Find and highlight shortest path using built-in methods
+    function findAndHighlightPath() {
+      const startId = parseInt(document.getElementById('startNode').value);
+      const endId = parseInt(document.getElementById('endNode').value);
+      
+      if (isNaN(startId) || isNaN(endId)) {
+        updateStatus('Please select both start and end nodes.');
+        return;
+      }
+      
+      if (startId === endId) {
+        updateStatus('Start and end nodes must be different.');
+        return;
+      }
+      
+      // Use the built-in library method!
+      const path = Graph.findAndHighlightPath(startId, endId);
+      
+      if (path) {
+        updateStatus(`Path found! Length: ${path.length} nodes, Distance: ${path.length - 1} edges\nPath: ${path.join(' → ')}`);
+      } else {
+        updateStatus('No path found between the selected nodes.');
+      }
+    }
+
+    // Clear path highlighting
+    function clearPath() {
+      Graph.clearPathHighlight();
+      document.getElementById('startNode').value = '';
+      document.getElementById('endNode').value = '';
+      updateStatus('');
+    }
+
+    // Initialize the graph
+    const Graph = new ForceGraph()
+      (document.getElementById('graph'))
+      .graphData(gData)
+      .nodeLabel(node => `${node.name} (ID: ${node.id})`)
+      .onNodeClick(node => {
+        // Quick selection by clicking nodes
+        const startSelect = document.getElementById('startNode');
+        const endSelect = document.getElementById('endNode');
+        
+        if (!startSelect.value) {
+          startSelect.value = node.id;
+          updateStatus('Start node selected. Now select an end node.');
+        } else if (!endSelect.value) {
+          endSelect.value = node.id;
+          updateStatus('End node selected. Click "Find Shortest Path" to calculate.');
+        } else {
+          // Both are selected, replace start with this node
+          startSelect.value = node.id;
+          endSelect.value = '';
+          updateStatus('New start node selected. Now select an end node.');
+        }
+      })
+      .autoPauseRedraw(false); // Keep redrawing to show updates
+
+    // Event listeners
+    document.getElementById('findPath').addEventListener('click', findAndHighlightPath);
+    document.getElementById('clearPath').addEventListener('click', clearPath);
+
+    // Initialize
+    populateSelectors();
+    updateStatus('Select start and end nodes, then click "Find Shortest Path". This example uses the built-in library methods!');
+  </script>
+</body>
