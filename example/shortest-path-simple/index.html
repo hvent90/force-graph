@@ -1,0 +1,219 @@
+<head>
+  <style>
+    body { margin: 0; font-family: Arial, sans-serif; }
+    #graph {
+      width: 100vw;
+      height: 100vh;
+    }
+    #info {
+      position: absolute;
+      top: 10px;
+      left: 10px;
+      background: rgba(255, 255, 255, 0.9);
+      padding: 10px;
+      border-radius: 5px;
+      box-shadow: 0 2px 5px rgba(0,0,0,0.2);
+      z-index: 1000;
+      max-width: 300px;
+    }
+    button {
+      margin: 5px;
+      padding: 8px 15px;
+      background-color: #4CAF50;
+      color: white;
+      border: none;
+      border-radius: 3px;
+      cursor: pointer;
+    }
+    button:hover { background-color: #45a049; }
+    .highlight { background-color: #ffeb3b !important; }
+    #pathInfo {
+      margin-top: 10px;
+      font-size: 12px;
+      color: #666;
+    }
+  </style>
+  <script src="//unpkg.com/force-graph"></script>
+</head>
+
+<body>
+  <div id="info">
+    <h3>Shortest Path Demo</h3>
+    <p>Click two nodes to find the shortest path between them.</p>
+    <button onclick="clearPath()">Clear Path</button>
+    <button onclick="generateNewGraph()">New Graph</button>
+    <div id="pathInfo"></div>
+  </div>
+
+  <div id="graph"></div>
+
+  <script>
+    let graph;
+    let selectedNodes = [];
+    let pathNodes = new Set();
+    let pathLinks = new Set();
+    let graphData;
+
+    // Shortest path algorithm (BFS)
+    function findShortestPath(adjacencyList, startId, endId) {
+      if (startId === endId) return [startId];
+      
+      const queue = [startId];
+      const visited = new Set([startId]);
+      const parent = { [startId]: null };
+      
+      while (queue.length > 0) {
+        const current = queue.shift();
+        
+        if (current === endId) {
+          const path = [];
+          let node = endId;
+          while (node !== null) {
+            path.unshift(node);
+            node = parent[node];
+          }
+          return path;
+        }
+        
+        for (const neighbor of adjacencyList[current] || []) {
+          if (!visited.has(neighbor)) {
+            visited.add(neighbor);
+            parent[neighbor] = current;
+            queue.push(neighbor);
+          }
+        }
+      }
+      return null;
+    }
+
+    // Build adjacency list from graph data
+    function buildAdjacencyList(gData) {
+      const adjacencyList = {};
+      gData.nodes.forEach(node => adjacencyList[node.id] = []);
+      gData.links.forEach(link => {
+        const sourceId = typeof link.source === 'object' ? link.source.id : link.source;
+        const targetId = typeof link.target === 'object' ? link.target.id : link.target;
+        adjacencyList[sourceId].push(targetId);
+        adjacencyList[targetId].push(sourceId);
+      });
+      return adjacencyList;
+    }
+
+    // Highlight path between two nodes
+    function highlightPath(startNodeId, endNodeId) {
+      const adjacencyList = buildAdjacencyList(graphData);
+      const path = findShortestPath(adjacencyList, startNodeId, endNodeId);
+      
+      if (!path) {
+        document.getElementById('pathInfo').innerHTML = 'No path found!';
+        return;
+      }
+
+      // Clear previous highlights
+      pathNodes.clear();
+      pathLinks.clear();
+
+      // Highlight path nodes
+      path.forEach(nodeId => {
+        const node = graphData.nodes.find(n => n.id === nodeId);
+        if (node) pathNodes.add(node);
+      });
+
+      // Highlight path links
+      for (let i = 0; i < path.length - 1; i++) {
+        const sourceId = path[i];
+        const targetId = path[i + 1];
+        const link = graphData.links.find(l => {
+          const lSourceId = typeof l.source === 'object' ? l.source.id : l.source;
+          const lTargetId = typeof l.target === 'object' ? l.target.id : l.target;
+          return (lSourceId === sourceId && lTargetId === targetId) ||
+                 (lSourceId === targetId && lTargetId === sourceId);
+        });
+        if (link) pathLinks.add(link);
+      }
+
+      document.getElementById('pathInfo').innerHTML = 
+        `Path found: ${path.length} nodes, ${path.length - 1} edges<br>` +
+        `Path: ${path.join(' → ')}`;
+    }
+
+    // Clear path highlighting
+    function clearPath() {
+      selectedNodes = [];
+      pathNodes.clear();
+      pathLinks.clear();
+      document.getElementById('pathInfo').innerHTML = '';
+    }
+
+    // Generate a new random graph
+    function generateNewGraph() {
+      const N = 25;
+      graphData = {
+        nodes: [...Array(N).keys()].map(i => ({ id: i, name: `${i}` })),
+        links: []
+      };
+
+      // Create connected graph
+      for (let i = 1; i < N; i++) {
+        graphData.links.push({
+          source: i,
+          target: Math.floor(Math.random() * i)
+        });
+      }
+
+      // Add some random connections
+      for (let i = 0; i < N * 0.4; i++) {
+        const source = Math.floor(Math.random() * N);
+        const target = Math.floor(Math.random() * N);
+        if (source !== target) {
+          const linkExists = graphData.links.some(link => 
+            (link.source === source && link.target === target) ||
+            (link.source === target && link.target === source)
+          );
+          if (!linkExists) {
+            graphData.links.push({ source, target });
+          }
+        }
+      }
+
+      clearPath();
+      graph.graphData(graphData);
+    }
+
+    // Initialize graph
+    function initGraph() {
+      generateNewGraph();
+      
+      graph = new ForceGraph()
+        (document.getElementById('graph'))
+        .graphData(graphData)
+        .nodeLabel(node => `Node ${node.id}`)
+        .nodeColor(node => {
+          if (selectedNodes.length > 0 && node.id === selectedNodes[0]) return '#ff4444'; // Start
+          if (selectedNodes.length > 1 && node.id === selectedNodes[1]) return '#4444ff'; // End
+          if (pathNodes.has(node)) return '#44ff44'; // Path
+          return '#69b3a2'; // Default
+        })
+        .linkColor(link => pathLinks.has(link) ? '#ff6600' : '#999999')
+        .linkWidth(link => pathLinks.has(link) ? 3 : 1)
+        .linkDirectionalParticles(link => pathLinks.has(link) ? 2 : 0)
+        .onNodeClick(node => {
+          selectedNodes.push(node.id);
+          
+          if (selectedNodes.length === 1) {
+            document.getElementById('pathInfo').innerHTML = `Start: Node ${node.id}. Click another node for the end.`;
+          } else if (selectedNodes.length === 2) {
+            highlightPath(selectedNodes[0], selectedNodes[1]);
+            selectedNodes = []; // Reset for next selection
+          }
+        })
+        .autoPauseRedraw(false);
+    }
+
+    // Start the demo when DOM is loaded
+    document.addEventListener('DOMContentLoaded', function() {
+      console.log('DOM loaded, initializing graph...');
+      initGraph();
+    });
+  </script>
+</body>

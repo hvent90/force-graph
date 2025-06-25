@@ -1,0 +1,374 @@
+<head>
+  <style>
+    body { margin: 0; font-family: Arial, sans-serif; }
+    #controls {
+      position: absolute;
+      top: 10px;
+      left: 10px;
+      background: rgba(255, 255, 255, 0.9);
+      padding: 15px;
+      border-radius: 5px;
+      box-shadow: 0 2px 5px rgba(0,0,0,0.2);
+      z-index: 1000;
+    }
+    .control-group {
+      margin-bottom: 10px;
+    }
+    label {
+      display: block;
+      margin-bottom: 5px;
+      font-weight: bold;
+    }
+    select, button {
+      padding: 5px;
+      margin-right: 10px;
+    }
+    button {
+      background-color: #4CAF50;
+      color: white;
+      border: none;
+      cursor: pointer;
+      border-radius: 3px;
+    }
+    button:hover {
+      background-color: #45a049;
+    }
+    button:disabled {
+      background-color: #cccccc;
+      cursor: not-allowed;
+    }
+    #status {
+      margin-top: 10px;
+      padding: 5px;
+      font-size: 12px;
+      color: #666;
+    }
+    #legend {
+      position: absolute;
+      top: 10px;
+      right: 10px;
+      background: rgba(255, 255, 255, 0.9);
+      padding: 15px;
+      border-radius: 5px;
+      box-shadow: 0 2px 5px rgba(0,0,0,0.2);
+      z-index: 1000;
+    }
+    .legend-item {
+      display: flex;
+      align-items: center;
+      margin-bottom: 5px;
+    }
+    .legend-color {
+      width: 20px;
+      height: 20px;
+      border-radius: 50%;
+      margin-right: 10px;
+    }
+  </style>
+
+  <script src="//unpkg.com/force-graph"></script>
+  <!--<script src="../../dist/force-graph.js"></script>-->
+</head>
+
+<body>
+  <div id="controls">
+    <div class="control-group">
+      <label for="startNode">Start Node:</label>
+      <select id="startNode">
+        <option value="">Select start node...</option>
+      </select>
+    </div>
+    <div class="control-group">
+      <label for="endNode">End Node:</label>
+      <select id="endNode">
+        <option value="">Select end node...</option>
+      </select>
+    </div>
+    <div class="control-group">
+      <button id="findPath">Find Shortest Path</button>
+      <button id="clearPath">Clear Path</button>
+    </div>
+    <div id="status"></div>
+  </div>
+
+  <div id="legend">
+    <h4>Legend</h4>
+    <div class="legend-item">
+      <div class="legend-color" style="background-color: #ff4444;"></div>
+      <span>Start Node</span>
+    </div>
+    <div class="legend-item">
+      <div class="legend-color" style="background-color: #4444ff;"></div>
+      <span>End Node</span>
+    </div>
+    <div class="legend-item">
+      <div class="legend-color" style="background-color: #44ff44;"></div>
+      <span>Path Nodes</span>
+    </div>
+    <div class="legend-item">
+      <div class="legend-color" style="background-color: #ffaa00;"></div>
+      <span>Path Links</span>
+    </div>
+  </div>
+
+  <div id="graph"></div>
+
+  <script>
+    // Generate a more complex graph for pathfinding demonstration
+    const N = 50;
+    const gData = {
+      nodes: [...Array(N).keys()].map(i => ({ 
+        id: i,
+        name: `Node ${i}`,
+        originalColor: i % 5 === 0 ? '#ff6b6b' : '#4ecdc4' // Some nodes have different colors
+      })),
+      links: []
+    };
+
+    // Create a more interesting graph structure with multiple paths
+    // First create a tree structure
+    for (let i = 1; i < N; i++) {
+      gData.links.push({
+        source: i,
+        target: Math.floor(Math.random() * i)
+      });
+    }
+
+    // Add some additional random connections to create alternative paths
+    for (let i = 0; i < N * 0.3; i++) {
+      const source = Math.floor(Math.random() * N);
+      const target = Math.floor(Math.random() * N);
+      if (source !== target) {
+        // Check if this link already exists
+        const linkExists = gData.links.some(link => 
+          (link.source === source && link.target === target) ||
+          (link.source === target && link.target === source)
+        );
+        if (!linkExists) {
+          gData.links.push({ source, target });
+        }
+      }
+    }
+
+    // Build adjacency list for pathfinding
+    function buildAdjacencyList(graphData) {
+      const adjacencyList = {};
+      
+      // Initialize adjacency list
+      graphData.nodes.forEach(node => {
+        adjacencyList[node.id] = [];
+      });
+      
+      // Add edges (undirected graph)
+      graphData.links.forEach(link => {
+        const sourceId = typeof link.source === 'object' ? link.source.id : link.source;
+        const targetId = typeof link.target === 'object' ? link.target.id : link.target;
+        
+        adjacencyList[sourceId].push(targetId);
+        adjacencyList[targetId].push(sourceId);
+      });
+      
+      return adjacencyList;
+    }
+
+    // BFS shortest path algorithm
+    function findShortestPath(adjacencyList, startId, endId) {
+      if (startId === endId) return [startId];
+      
+      const queue = [startId];
+      const visited = new Set([startId]);
+      const parent = { [startId]: null };
+      
+      while (queue.length > 0) {
+        const current = queue.shift();
+        
+        if (current === endId) {
+          // Reconstruct path
+          const path = [];
+          let node = endId;
+          while (node !== null) {
+            path.unshift(node);
+            node = parent[node];
+          }
+          return path;
+        }
+        
+        for (const neighbor of adjacencyList[current] || []) {
+          if (!visited.has(neighbor)) {
+            visited.add(neighbor);
+            parent[neighbor] = current;
+            queue.push(neighbor);
+          }
+        }
+      }
+      
+      return null; // No path found
+    }
+
+    // Cross-link node objects (for easy neighbor access)
+    gData.links.forEach(link => {
+      const a = gData.nodes[link.source];
+      const b = gData.nodes[link.target];
+      !a.neighbors && (a.neighbors = []);
+      !b.neighbors && (b.neighbors = []);
+      a.neighbors.push(b);
+      b.neighbors.push(a);
+
+      !a.links && (a.links = []);
+      !b.links && (b.links = []);
+      a.links.push(link);
+      b.links.push(link);
+    });
+
+    const NODE_R = 6;
+    const adjacencyList = buildAdjacencyList(gData);
+    
+    // State for path highlighting
+    let currentPath = [];
+    let pathNodes = new Set();
+    let pathLinks = new Set();
+    let startNode = null;
+    let endNode = null;
+
+    // Populate node selectors
+    function populateSelectors() {
+      const startSelect = document.getElementById('startNode');
+      const endSelect = document.getElementById('endNode');
+      
+      gData.nodes.forEach(node => {
+        const option1 = document.createElement('option');
+        option1.value = node.id;
+        option1.textContent = node.name;
+        startSelect.appendChild(option1);
+        
+        const option2 = document.createElement('option');
+        option2.value = node.id;
+        option2.textContent = node.name;
+        endSelect.appendChild(option2);
+      });
+    }
+
+    // Update status display
+    function updateStatus(message) {
+      document.getElementById('status').textContent = message;
+    }
+
+    // Clear current path
+    function clearPath() {
+      currentPath = [];
+      pathNodes.clear();
+      pathLinks.clear();
+      startNode = null;
+      endNode = null;
+      updateStatus('');
+    }
+
+    // Find and highlight shortest path
+    function findAndHighlightPath() {
+      const startId = parseInt(document.getElementById('startNode').value);
+      const endId = parseInt(document.getElementById('endNode').value);
+      
+      if (isNaN(startId) || isNaN(endId)) {
+        updateStatus('Please select both start and end nodes.');
+        return;
+      }
+      
+      if (startId === endId) {
+        updateStatus('Start and end nodes must be different.');
+        return;
+      }
+      
+      // Clear previous path
+      clearPath();
+      
+      // Find shortest path
+      const path = findShortestPath(adjacencyList, startId, endId);
+      
+      if (!path) {
+        updateStatus('No path found between the selected nodes.');
+        return;
+      }
+      
+      // Set up highlighting
+      currentPath = path;
+      startNode = gData.nodes[startId];
+      endNode = gData.nodes[endId];
+      
+      // Add path nodes to highlight set
+      path.forEach(nodeId => {
+        pathNodes.add(gData.nodes[nodeId]);
+      });
+      
+      // Add path links to highlight set
+      for (let i = 0; i < path.length - 1; i++) {
+        const sourceId = path[i];
+        const targetId = path[i + 1];
+        
+        // Find the link between these nodes
+        const link = gData.links.find(l => {
+          const lSourceId = typeof l.source === 'object' ? l.source.id : l.source;
+          const lTargetId = typeof l.target === 'object' ? l.target.id : l.target;
+          return (lSourceId === sourceId && lTargetId === targetId) ||
+                 (lSourceId === targetId && lTargetId === sourceId);
+        });
+        
+        if (link) {
+          pathLinks.add(link);
+        }
+      }
+      
+      updateStatus(`Path found! Length: ${path.length} nodes, Distance: ${path.length - 1} edges`);
+    }
+
+    // Initialize the graph
+    const Graph = new ForceGraph()
+      (document.getElementById('graph'))
+      .graphData(gData)
+      .nodeRelSize(NODE_R)
+      .nodeId('id')
+      .nodeLabel(node => `${node.name} (ID: ${node.id})`)
+      .nodeColor(node => {
+        if (node === startNode) return '#ff4444';
+        if (node === endNode) return '#4444ff';
+        if (pathNodes.has(node)) return '#44ff44';
+        return node.originalColor;
+      })
+      .linkColor(link => pathLinks.has(link) ? '#ffaa00' : '#999999')
+      .linkWidth(link => pathLinks.has(link) ? 4 : 1)
+      .linkDirectionalParticles(link => pathLinks.has(link) ? 3 : 0)
+      .linkDirectionalParticleSpeed(0.01)
+      .linkDirectionalParticleWidth(3)
+      .linkDirectionalParticleColor('#ffaa00')
+      .onNodeClick(node => {
+        // Quick selection by clicking nodes
+        const startSelect = document.getElementById('startNode');
+        const endSelect = document.getElementById('endNode');
+        
+        if (!startSelect.value) {
+          startSelect.value = node.id;
+          updateStatus('Start node selected. Now select an end node.');
+        } else if (!endSelect.value) {
+          endSelect.value = node.id;
+          updateStatus('End node selected. Click "Find Shortest Path" to calculate.');
+        } else {
+          // Both are selected, replace start with this node
+          startSelect.value = node.id;
+          endSelect.value = '';
+          updateStatus('New start node selected. Now select an end node.');
+        }
+      })
+      .autoPauseRedraw(false); // Keep redrawing to show updates
+
+    // Event listeners
+    document.getElementById('findPath').addEventListener('click', findAndHighlightPath);
+    document.getElementById('clearPath').addEventListener('click', () => {
+      clearPath();
+      document.getElementById('startNode').value = '';
+      document.getElementById('endNode').value = '';
+    });
+
+    // Initialize
+    populateSelectors();
+    updateStatus('Select start and end nodes, then click "Find Shortest Path".');
+  </script>
+</body>
